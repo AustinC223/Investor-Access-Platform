@@ -1,4 +1,5 @@
 @echo off
 cd /d %~dp0
-python -m streamlit run app2.py
+call C:\Users\0223c\anaconda3\Scripts\activate.bat
+python -m streamlit run app.py
 pause
