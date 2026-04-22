@@ -146,10 +146,11 @@ def read_public_sheet_range(spreadsheet_id: str, sheet: str, cell_range: str) ->
     "Accept": "text/csv,application/xhtml+xml",
     "Referer": "https://docs.google.com/",
 }
+    
+    r = requests.get(url, headers=headers, timeout=30)
     st.write("URL:", url)
     st.write("Status:", r.status_code)
     st.write("Response preview:", r.text[:300])
-    r = requests.get(url, headers=headers, timeout=30)
     if r.status_code != 200:
         raise ValueError(f"Sheet fetch failed (HTTP {r.status_code}). URL: {url}")
     if "<html" in r.text.lower():
