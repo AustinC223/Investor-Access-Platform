@@ -334,7 +334,8 @@ class PortfolioData:
 
 
 def detect_twr_header_row(grid: pd.DataFrame, max_rows=60) -> int:
-    g = grid.copy().iloc[:max_rows, :].applymap(norm_header)
+    g = grid.copy().iloc[:max_rows, :].astype(str)
+    g = g.apply(lambda col: col.map(norm_header))
     for r in range(g.shape[0]):
         row = list(g.iloc[r, :])
         row_set = set([x for x in row if x])
@@ -410,7 +411,8 @@ def load_twr(pid: str) -> pd.DataFrame:
 def find_overview_totals_gviz_heuristic(ov: pd.DataFrame) -> tuple[float, float]:
     INVESTED_WORDS = {"invested", "principal"}
     BALANCE_WORDS = {"balance", "current"}
-    g = ov.copy().applymap(clean_str)
+    g = ov.copy().astype(str)
+    g = g.apply(lambda col: col.map(clean_str))
     best = None  # (confidence_score, invested, balance)
 
     # Precompute column text (headers + column content)
