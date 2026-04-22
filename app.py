@@ -389,6 +389,8 @@ def load_twr(pid: str) -> pd.DataFrame:
 
     out = pd.DataFrame()
     out["Date"] = get_col_as_series(df, mapped["Date"]).map(safe_dt)
+    out["Date"] = pd.to_datetime(out["Date"], errors="coerce")
+    out = out.dropna(subset=["Date"])
     out["Beginning Value"] = get_col_as_series(df, mapped["Beginning Value"]).map(to_num)
     out["CF"] = get_col_as_series(df, mapped["CF"]).map(to_num).fillna(0.0)
     out["Ending Value"] = get_col_as_series(df, mapped["Ending Value"]).map(to_num)
