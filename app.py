@@ -787,8 +787,7 @@ login = st.sidebar.button("Access Portfolio")
 master = load_master_credentials()
 
 if login:
-    row = load_master_credentials()
-    row = find_investor_by_password(password, row)
+    row = find_investor_by_password(password, load_master_credentials())
     if row is None:
         st.sidebar.error("Invalid password.")
         st.session_state["authed"] = False
