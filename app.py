@@ -132,7 +132,7 @@ def extract_sheet_id(url: str) -> str:
 
 
 def gviz_csv_url(spreadsheet_id: str, sheet: str, cell_range: str | None = None) -> str:
-    return f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/export?format=csv&sheet={sheet}"
+    base = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/export?format=csv&sheet={sheet}"
     if cell_range:
         base += f"&range={cell_range}"
     return base
@@ -148,9 +148,6 @@ def read_public_sheet_range(spreadsheet_id: str, sheet: str, cell_range: str) ->
 }
     
     r = requests.get(url, headers=headers, timeout=30)
-    st.write("URL:", url)
-    st.write("Status:", r.status_code)
-    st.write("Response preview:", r.text[:300])
     if r.status_code != 200:
         raise ValueError(f"Sheet fetch failed (HTTP {r.status_code}). URL: {url}")
     if "<html" in r.text.lower():
