@@ -245,8 +245,9 @@ def find_block_start_after_sum(grid: pd.DataFrame, label_col: int, fallback_row:
 # MASTER PARSING
 # ============================================================
 def _scan_master_for_table(grid: pd.DataFrame) -> pd.DataFrame:
-    g = grid.copy().applymap(clean_str)
-    gl = g.applymap(lambda v: v.lower())
+    g = grid.copy().astype(str)
+    g = g.apply(lambda col: col.map(clean_str))
+    gl = g.apply(lambda col: col.map(str.lower))
 
     target = ["name", "password", "portfolio link"]
     header_row = None
