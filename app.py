@@ -832,7 +832,8 @@ st.sidebar.markdown("## Date Range")
 preset = st.sidebar.selectbox("Preset", ["1M", "3M", "6M", "YTD", "All", "Custom"], index=2)
 
 min_d = twr["Date"].min().date()
-max_d = min(twr["Date"].max().date(), dt.date.today())
+max_date = twr["Date"].dropna().max()
+max_d = min(max_date.date(), dt.date.today())
 
 if preset == "Custom":
     d1, d2 = st.sidebar.date_input(
