@@ -55,7 +55,7 @@ LOGO_FILES = [
 ]
 
 MASTER_URL = "https://docs.google.com/spreadsheets/d/15C7vLJLkyJGumLwD4Ld76awOTi26JJcrDZUxwLKsDO0/edit?gid=0#gid=0"
-MASTER_TAB_NAME = None
+MASTER_TAB_NAME = "Investor Data Room"
 MASTER_TAB_CANDIDATES = ["Investor Data Room", "Data Room", "Master", "Data", "Sheet1"]
 
 
