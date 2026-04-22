@@ -132,7 +132,7 @@ def extract_sheet_id(url: str) -> str:
 
 
 def gviz_csv_url(spreadsheet_id: str, sheet: str, cell_range: str | None = None) -> str:
-    base = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/gviz/tq?tqx=out:csv&sheet={sheet}"
+    return f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/export?format=csv&sheet={sheet}"
     if cell_range:
         base += f"&range={cell_range}"
     return base
