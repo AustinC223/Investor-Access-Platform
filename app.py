@@ -197,7 +197,19 @@ def to_num(x):
 
 
 def safe_dt(x):
-    return pd.to_datetime(clean_str(x), errors="coerce").tz_localize(None)
+    s = clean_str(x)
+    # Handle Excel serial number dates (e.g. "44927")
+    if re.fullmatch(r"\d{4,6}", s):
+        try:
+            return pd.Timestamp("1899-12-30") + pd.to_timedelta(int(s), unit="D")
+        except Exception:
+            pass
+    result = pd.to_datetime(s, errors="coerce", dayfirst=False)
+    if pd.isna(result):
+        result = pd.to_datetime(s, errors="coerce", dayfirst=True)
+    if pd.isna(result):
+        return pd.NaT
+    return result.tz_localize(None) if result.tzinfo is not None else result
 
 
 def get_col_as_series(df: pd.DataFrame, colname: str) -> pd.Series:
@@ -565,7 +577,7 @@ def load_portfolio(portfolio_url: str) -> PortfolioData:
     # Overview heuristic
     ov = read_public_sheet_range(pid, sheet="Overview", cell_range="A1:K300")
     invested_capital, current_balance = find_overview_totals_gviz_heuristic(ov)
-
+    
     return PortfolioData(
         twr=twr,
         weights=w,
@@ -822,6 +834,10 @@ if "docs.google.com/spreadsheets" not in portfolio_link:
 # ============================================================
 with st.spinner("Loading portfolio..."):
     pdata = load_portfolio(portfolio_link)
+    
+with st.expander("DEBUG: Raw TWR dates"):
+    st.write(pdata.twr["Date"].head(10))
+    st.write("Total rows:", len(pdata.twr))
 
 twr = pdata.twr.copy()
 
@@ -833,9 +849,13 @@ st.sidebar.markdown("---")
 st.sidebar.markdown("## Date Range")
 preset = st.sidebar.selectbox("Preset", ["1M", "3M", "6M", "YTD", "All", "Custom"], index=2)
 
-min_d = twr["Date"].min().date()
-max_date = twr["Date"].dropna().max()
-max_d = min(max_date.date(), dt.date.today())
+valid_dates = twr["Date"].dropna()
+if len(valid_dates) == 0:
+    st.error("No valid date rows found in the TWR sheet. Check that your sheet is published to web and the Date column is formatted correctly (not as Excel serial numbers).")
+    st.stop()
+
+min_d = valid_dates.min().date()
+max_d = min(valid_dates.max().date(), dt.date.today())
 
 if preset == "Custom":
     d1, d2 = st.sidebar.date_input(
