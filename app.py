@@ -142,10 +142,10 @@ def gviz_csv_url(spreadsheet_id: str, sheet: str, cell_range: str | None = None)
 def read_public_sheet_range(spreadsheet_id: str, sheet: str, cell_range: str) -> pd.DataFrame:
     url = gviz_csv_url(spreadsheet_id, sheet=sheet, cell_range=cell_range)
     headers = {
-        "User-Agent": "Mozilla/5.0",
-        "Accept": "text/csv,*/*",
-        "Accept-Language": "en-US,en;q=0.9",
-    }
+    "User-Agent": "Mozilla/5.0",
+    "Accept": "text/csv,application/xhtml+xml",
+    "Referer": "https://docs.google.com/",
+}
     r = requests.get(url, headers=headers, timeout=30)
     if r.status_code != 200:
         raise ValueError(f"Sheet fetch failed (HTTP {r.status_code}). URL: {url}")
