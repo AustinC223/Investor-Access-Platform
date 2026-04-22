@@ -146,6 +146,9 @@ def read_public_sheet_range(spreadsheet_id: str, sheet: str, cell_range: str) ->
     "Accept": "text/csv,application/xhtml+xml",
     "Referer": "https://docs.google.com/",
 }
+    st.write("URL:", url)
+    st.write("Status:", r.status_code)
+    st.write("Response preview:", r.text[:300])
     r = requests.get(url, headers=headers, timeout=30)
     if r.status_code != 200:
         raise ValueError(f"Sheet fetch failed (HTTP {r.status_code}). URL: {url}")
@@ -301,8 +304,10 @@ def load_master_credentials() -> pd.DataFrame:
             return _scan_master_for_table(grid)
         except Exception as e:
             last_err = e
+            st.error(f"Sheet '{s}' failed: {e}")   # 👈 ADD THIS
             continue
     raise ValueError(f"Failed to load master sheet. Tabs tried: {sheets}. Last error: {last_err}")
+    
 
 
 def find_investor_by_password(password: str, master_df: pd.DataFrame) -> pd.Series | None:
