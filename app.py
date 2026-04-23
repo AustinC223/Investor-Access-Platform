@@ -21,7 +21,7 @@ import datetime as dt
 import random
 import time
 from dataclasses import dataclass
-
+from streamlit_gsheets import GSheetsConnection
 import numpy as np
 import pandas as pd
 import requests
@@ -138,41 +138,29 @@ def gviz_csv_url(spreadsheet_id: str, sheet: str, cell_range: str | None = None)
     return base
 
 
-@st.cache_data(show_spinner=False, ttl=300)
-def read_public_sheet_range(spreadsheet_id: str, sheet: str, cell_range: str) -> pd.DataFrame:
-    url = gviz_csv_url(spreadsheet_id, sheet=sheet, cell_range=cell_range)
-    # 1. 更新 User-Agent，偽裝成最新的 Chrome 瀏覽器
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
-        "Accept": "text/csv,*/*",
-        "Accept-Language": "en-US,en;q=0.9",
-    }
+def read_public_sheet_range(spreadsheet_id: str, sheet: str, cell_range: str | None = None) -> pd.DataFrame:
+    # 組成目標試算表的完整編輯網址 (官方套件吃這個格式)
+    url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/edit"
     
-    # 2. 加入 Retry 機制 (重試 3 次)，應對 Streamlit Cloud IP 偶發的限流
-    last_err_msg = ""
-    for attempt in range(3):
-        try:
-            r = requests.get(url, headers=headers, timeout=30)
-            
-            if r.status_code != 200:
-                last_err_msg = f"HTTP {r.status_code}"
-                time.sleep(1.0 + random.random()) # 隨機等待 1~2 秒再試
-                continue
-                
-            if "<html" in r.text.lower():
-                last_err_msg = "Google returned HTML (可能被 Google 防火牆暫時阻擋)"
-                time.sleep(1.5 + random.random()) # 被擋的話稍微等久一點
-                continue
-                
-            # 成功抓取，直接回傳
-            return pd.read_csv(io.StringIO(r.text), header=None)
-            
-        except Exception as e:
-            last_err_msg = str(e)
-            time.sleep(1.0 + random.random())
-
-    # 如果 3 次都失敗，才拋出錯誤
-    raise ValueError(f"Sheet fetch failed after 3 attempts. URL: {url} | Last error: {last_err_msg}")
+    # 建立與 Google Sheets 的連線
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    
+    try:
+        # conn.read 會自動處理 API 呼叫與重試
+        # 加上 header=None 是為了確保讀下來的結構是「純網格」，這樣才不會破壞你後面的表格定位邏輯
+        df = conn.read(
+            spreadsheet=url,
+            worksheet=sheet,
+            header=None,
+            ttl=300  # 內建快取 5 分鐘 (300秒)
+        )
+        
+        # 清理可能產生的全空列，保持 DataFrame 乾淨
+        df = df.dropna(how='all')
+        return df
+        
+    except Exception as e:
+        raise ValueError(f"官方套件讀取失敗 (請確認該 Google Sheet 已設為'知道連結的人均可檢視')。分頁: {sheet} | 錯誤: {e}")
 
 def clean_str(x) -> str:
     if isinstance(x, pd.Series):
