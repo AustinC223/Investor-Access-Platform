@@ -251,8 +251,8 @@ def find_block_start_after_sum(grid: pd.DataFrame, label_col: int, fallback_row:
 # MASTER PARSING
 # ============================================================
 def _scan_master_for_table(grid: pd.DataFrame) -> pd.DataFrame:
-    g = grid.copy().applymap(clean_str)
-    gl = g.applymap(lambda v: v.lower())
+    g = grid.copy().map(clean_str)
+    gl = g.map(lambda v: v.lower())
 
     target = ["name", "password", "portfolio link"]
     header_row = None
@@ -337,7 +337,7 @@ class PortfolioData:
 
 
 def detect_twr_header_row(grid: pd.DataFrame, max_rows=60) -> int:
-    g = grid.copy().iloc[:max_rows, :].applymap(norm_header)
+    g = grid.copy().iloc[:max_rows, :].map(norm_header)
     for r in range(g.shape[0]):
         row = list(g.iloc[r, :])
         row_set = set([x for x in row if x])
@@ -413,7 +413,7 @@ def load_twr(pid: str) -> pd.DataFrame:
 def find_overview_totals_gviz_heuristic(ov: pd.DataFrame) -> tuple[float, float]:
     INVESTED_WORDS = {"invested", "principal"}
     BALANCE_WORDS = {"balance", "current"}
-    g = ov.copy().applymap(clean_str)
+    g = ov.copy().map(clean_str)
     best = None  # (confidence_score, invested, balance)
 
     # Precompute column text (headers + column content)
