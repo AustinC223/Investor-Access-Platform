@@ -55,7 +55,7 @@ LOGO_FILES = [
 ]
 
 MASTER_URL = "https://docs.google.com/spreadsheets/d/15C7vLJLkyJGumLwD4Ld76awOTi26JJcrDZUxwLKsDO0/edit?gid=0#gid=0"
-MASTER_TAB_NAME = "Investor Data Room"
+MASTER_TAB_NAME = None
 MASTER_TAB_CANDIDATES = ["Investor Data Room", "Data Room", "Master", "Data", "Sheet1"]
 
 
@@ -132,7 +132,7 @@ def extract_sheet_id(url: str) -> str:
 
 
 def gviz_csv_url(spreadsheet_id: str, sheet: str, cell_range: str | None = None) -> str:
-    base = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/export?format=csv&sheet={sheet}"
+    base = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/gviz/tq?tqx=out:csv&sheet={sheet}"
     if cell_range:
         base += f"&range={cell_range}"
     return base
@@ -142,11 +142,10 @@ def gviz_csv_url(spreadsheet_id: str, sheet: str, cell_range: str | None = None)
 def read_public_sheet_range(spreadsheet_id: str, sheet: str, cell_range: str) -> pd.DataFrame:
     url = gviz_csv_url(spreadsheet_id, sheet=sheet, cell_range=cell_range)
     headers = {
-    "User-Agent": "Mozilla/5.0",
-    "Accept": "text/csv,application/xhtml+xml",
-    "Referer": "https://docs.google.com/",
-}
-    
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "text/csv,*/*",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
     r = requests.get(url, headers=headers, timeout=30)
     if r.status_code != 200:
         raise ValueError(f"Sheet fetch failed (HTTP {r.status_code}). URL: {url}")
@@ -194,19 +193,7 @@ def to_num(x):
 
 
 def safe_dt(x):
-    s = clean_str(x)
-    # Handle Excel serial number dates (e.g. "44927")
-    if re.fullmatch(r"\d{4,6}", s):
-        try:
-            return pd.Timestamp("1899-12-30") + pd.to_timedelta(int(s), unit="D")
-        except Exception:
-            pass
-    result = pd.to_datetime(s, errors="coerce", dayfirst=False)
-    if pd.isna(result):
-        result = pd.to_datetime(s, errors="coerce", dayfirst=True)
-    if pd.isna(result):
-        return pd.NaT
-    return result.tz_localize(None) if result.tzinfo is not None else result
+    return pd.to_datetime(clean_str(x), errors="coerce").tz_localize(None)
 
 
 def get_col_as_series(df: pd.DataFrame, colname: str) -> pd.Series:
@@ -254,9 +241,8 @@ def find_block_start_after_sum(grid: pd.DataFrame, label_col: int, fallback_row:
 # MASTER PARSING
 # ============================================================
 def _scan_master_for_table(grid: pd.DataFrame) -> pd.DataFrame:
-    g = grid.copy().astype(str)
-    g = g.apply(lambda col: col.map(clean_str))
-    gl = g.apply(lambda col: col.map(str.lower))
+    g = grid.copy().applymap(clean_str)
+    gl = g.applymap(lambda v: v.lower())
 
     target = ["name", "password", "portfolio link"]
     header_row = None
@@ -315,10 +301,8 @@ def load_master_credentials() -> pd.DataFrame:
             return _scan_master_for_table(grid)
         except Exception as e:
             last_err = e
-            st.error(f"Sheet '{s}' failed: {e}")   # 👈 ADD THIS
             continue
     raise ValueError(f"Failed to load master sheet. Tabs tried: {sheets}. Last error: {last_err}")
-    
 
 
 def find_investor_by_password(password: str, master_df: pd.DataFrame) -> pd.Series | None:
@@ -343,8 +327,7 @@ class PortfolioData:
 
 
 def detect_twr_header_row(grid: pd.DataFrame, max_rows=60) -> int:
-    g = grid.copy().iloc[:max_rows, :].astype(str)
-    g = g.apply(lambda col: col.map(norm_header))
+    g = grid.copy().iloc[:max_rows, :].applymap(norm_header)
     for r in range(g.shape[0]):
         row = list(g.iloc[r, :])
         row_set = set([x for x in row if x])
@@ -398,8 +381,6 @@ def load_twr(pid: str) -> pd.DataFrame:
 
     out = pd.DataFrame()
     out["Date"] = get_col_as_series(df, mapped["Date"]).map(safe_dt)
-    out["Date"] = pd.to_datetime(out["Date"], errors="coerce")
-    out = out.dropna(subset=["Date"])
     out["Beginning Value"] = get_col_as_series(df, mapped["Beginning Value"]).map(to_num)
     out["CF"] = get_col_as_series(df, mapped["CF"]).map(to_num).fillna(0.0)
     out["Ending Value"] = get_col_as_series(df, mapped["Ending Value"]).map(to_num)
@@ -422,8 +403,7 @@ def load_twr(pid: str) -> pd.DataFrame:
 def find_overview_totals_gviz_heuristic(ov: pd.DataFrame) -> tuple[float, float]:
     INVESTED_WORDS = {"invested", "principal"}
     BALANCE_WORDS = {"balance", "current"}
-    g = ov.copy().astype(str)
-    g = g.apply(lambda col: col.map(clean_str))
+    g = ov.copy().applymap(clean_str)
     best = None  # (confidence_score, invested, balance)
 
     # Precompute column text (headers + column content)
@@ -574,7 +554,7 @@ def load_portfolio(portfolio_url: str) -> PortfolioData:
     # Overview heuristic
     ov = read_public_sheet_range(pid, sheet="Overview", cell_range="A1:K300")
     invested_capital, current_balance = find_overview_totals_gviz_heuristic(ov)
-    
+
     return PortfolioData(
         twr=twr,
         weights=w,
@@ -807,7 +787,8 @@ login = st.sidebar.button("Access Portfolio")
 master = load_master_credentials()
 
 if login:
-    row = find_investor_by_password(password, load_master_credentials())
+    row = load_master_credentials()
+    row = find_investor_by_password(password, row)
     if row is None:
         st.sidebar.error("Invalid password.")
         st.session_state["authed"] = False
@@ -831,10 +812,6 @@ if "docs.google.com/spreadsheets" not in portfolio_link:
 # ============================================================
 with st.spinner("Loading portfolio..."):
     pdata = load_portfolio(portfolio_link)
-    
-with st.expander("DEBUG: Raw TWR dates"):
-    st.write(pdata.twr["Date"].head(10))
-    st.write("Total rows:", len(pdata.twr))
 
 twr = pdata.twr.copy()
 
@@ -846,13 +823,8 @@ st.sidebar.markdown("---")
 st.sidebar.markdown("## Date Range")
 preset = st.sidebar.selectbox("Preset", ["1M", "3M", "6M", "YTD", "All", "Custom"], index=2)
 
-valid_dates = twr["Date"].dropna()
-if len(valid_dates) == 0:
-    st.error("No valid date rows found in the TWR sheet. Check that your sheet is published to web and the Date column is formatted correctly (not as Excel serial numbers).")
-    st.stop()
-
-min_d = valid_dates.min().date()
-max_d = min(valid_dates.max().date(), dt.date.today())
+min_d = twr["Date"].min().date()
+max_d = min(twr["Date"].max().date(), dt.date.today())
 
 if preset == "Custom":
     d1, d2 = st.sidebar.date_input(
