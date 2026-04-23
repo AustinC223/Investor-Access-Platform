@@ -141,18 +141,38 @@ def gviz_csv_url(spreadsheet_id: str, sheet: str, cell_range: str | None = None)
 @st.cache_data(show_spinner=False, ttl=300)
 def read_public_sheet_range(spreadsheet_id: str, sheet: str, cell_range: str) -> pd.DataFrame:
     url = gviz_csv_url(spreadsheet_id, sheet=sheet, cell_range=cell_range)
+    # 1. 更新 User-Agent，偽裝成最新的 Chrome 瀏覽器
     headers = {
-        "User-Agent": "Mozilla/5.0",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
         "Accept": "text/csv,*/*",
         "Accept-Language": "en-US,en;q=0.9",
     }
-    r = requests.get(url, headers=headers, timeout=30)
-    if r.status_code != 200:
-        raise ValueError(f"Sheet fetch failed (HTTP {r.status_code}). URL: {url}")
-    if "<html" in r.text.lower():
-        raise ValueError("Google returned HTML instead of CSV. Sheet is not public/published.")
-    return pd.read_csv(io.StringIO(r.text), header=None)
+    
+    # 2. 加入 Retry 機制 (重試 3 次)，應對 Streamlit Cloud IP 偶發的限流
+    last_err_msg = ""
+    for attempt in range(3):
+        try:
+            r = requests.get(url, headers=headers, timeout=30)
+            
+            if r.status_code != 200:
+                last_err_msg = f"HTTP {r.status_code}"
+                time.sleep(1.0 + random.random()) # 隨機等待 1~2 秒再試
+                continue
+                
+            if "<html" in r.text.lower():
+                last_err_msg = "Google returned HTML (可能被 Google 防火牆暫時阻擋)"
+                time.sleep(1.5 + random.random()) # 被擋的話稍微等久一點
+                continue
+                
+            # 成功抓取，直接回傳
+            return pd.read_csv(io.StringIO(r.text), header=None)
+            
+        except Exception as e:
+            last_err_msg = str(e)
+            time.sleep(1.0 + random.random())
 
+    # 如果 3 次都失敗，才拋出錯誤
+    raise ValueError(f"Sheet fetch failed after 3 attempts. URL: {url} | Last error: {last_err_msg}")
 
 def clean_str(x) -> str:
     if isinstance(x, pd.Series):
