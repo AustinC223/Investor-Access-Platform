@@ -139,28 +139,30 @@ def gviz_csv_url(spreadsheet_id: str, sheet: str, cell_range: str | None = None)
 
 
 def read_public_sheet_range(spreadsheet_id: str, sheet: str, cell_range: str | None = None) -> pd.DataFrame:
-    # 組成目標試算表的完整編輯網址 (官方套件吃這個格式)
-    url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/edit"
-    
-    # 建立與 Google Sheets 的連線
-    conn = st.connection("gsheets", type=GSheetsConnection)
-    
+    # 先嘗試直接用公開 CSV 讀取，最不依賴 Cloud secrets
     try:
-        # conn.read 會自動處理 API 呼叫與重試
-        # 加上 header=None 是為了確保讀下來的結構是「純網格」，這樣才不會破壞你後面的表格定位邏輯
-        df = conn.read(
-            spreadsheet=url,
-            worksheet=sheet,
-            header=None,
-            ttl=300  # 內建快取 5 分鐘 (300秒)
-        )
-        
-        # 清理可能產生的全空列，保持 DataFrame 乾淨
-        df = df.dropna(how='all')
+        url = gviz_csv_url(spreadsheet_id, sheet, cell_range)
+        df = pd.read_csv(url, header=None)
+        df = df.dropna(how="all")
         return df
-        
-    except Exception as e:
-        raise ValueError(f"官方套件讀取失敗 (請確認該 Google Sheet 已設為'知道連結的人均可檢視')。分頁: {sheet} | 錯誤: {e}")
+    except Exception as e_csv:
+        # 若公開讀取失敗，再退回 Streamlit connection
+        try:
+            url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/edit"
+            conn = st.connection("gsheets", type=GSheetsConnection)
+            df = conn.read(
+                spreadsheet=url,
+                worksheet=sheet,
+                header=None,
+                ttl=300
+            )
+            df = df.dropna(how="all")
+            return df
+        except Exception as e_conn:
+            raise ValueError(
+                f"讀取 Google Sheet 失敗。sheet={sheet}, range={cell_range}, "
+                f"csv_error={e_csv}, conn_error={e_conn}"
+            )
 
 def clean_str(x) -> str:
     if isinstance(x, pd.Series):
@@ -792,7 +794,12 @@ st.sidebar.markdown("## Investor Login")
 password = st.sidebar.text_input("Password", type="password", placeholder="Enter password")
 login = st.sidebar.button("Access Portfolio")
 
-master = load_master_credentials()
+try:
+    master = load_master_credentials()
+except Exception as e:
+    st.error(f"Failed to load master sheet: {e}")
+    st.info("Please check Streamlit Cloud secrets and Google Sheet sharing settings.")
+    st.stop()
 
 if login:
     row = load_master_credentials()
